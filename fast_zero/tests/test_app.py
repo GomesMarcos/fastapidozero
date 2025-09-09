@@ -1,22 +1,62 @@
 from http import HTTPStatus
 
-from fastapi.testclient import TestClient
 
-from fast_zero.app import app
-
-
-def test_root_must_return_200():
-    client = TestClient(app)
+def test_root_must_return_200(client):
     response = client.get('/')
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {'message': 'Olá, Mundo!'}
 
 
-def test_root_html_must_return_an_html_response():
-    client = TestClient(app)
+def test_root_html_must_return_an_html_response(client):
     response = client.get('/html')
 
     assert response.status_code == HTTPStatus.OK
     assert response.headers['content-type'] == 'text/html; charset=utf-8'
     assert response.text == '<h1>Olá, Mundo!</h1>'
+
+
+def test_create_user(client):
+    response = client.post(
+        '/users/',
+        json={
+            'username': 'testuser',
+            'email': 'testuser@example.com',
+            'password': 'password123',
+        },
+    )
+
+    assert response.status_code == HTTPStatus.CREATED
+    assert response.json() == {'id': 1, 'username': 'testuser'}
+
+
+def test_get_all_users(client):
+    """
+    Até implementar o fakedb para testes, este teste depende
+    do teste de criação de usuário."""
+
+    response = client.get('/users/')
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {'users': [{'id': 1, 'username': 'testuser'}]}
+
+
+def test_update_user(client, mock_get_user):
+    response = client.put(
+        '/users/1',
+        json={
+            'username': 'updateduser',
+            'email': 'updateduser@example.com',
+            'password': 'newpassword123',
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {'id': 1, 'username': 'updateduser'}
+
+
+def test_delete_user(client, mock_get_user):
+    response = client.delete('/users/1')
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {'message': 'Usuário 1 deletado com sucesso'}
