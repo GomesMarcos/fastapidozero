@@ -1,7 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from fast_zero.app import app
+from fast_zero.app import app, fake_db
+from fast_zero.schemas import UserDb
 
 
 @pytest.fixture
@@ -10,13 +11,19 @@ def client():
 
 
 @pytest.fixture
-def mock_get_user(monkeypatch):
-    class MockUser:
-        id = 1
-        username = 'testuser'
+def mock_create_user():
+    # Limpa a fake_db antes do teste
+    fake_db.clear()
 
-    def fake_get_user_by_id(user_id):
-        return MockUser() if user_id == 1 else None
+    # Cria o user e insere em fake_db
+    user = UserDb(
+        id=1,
+        username='testuser',
+        email='testuser@example.com',
+        password='password123',
+    )
+    fake_db.append(user)
 
-    # Mockando retorno de get_user_by_id
-    monkeypatch.setattr('fast_zero.app.get_user_by_id', fake_get_user_by_id)
+    yield user
+    # Limpa a fake_db após o teste
+    fake_db.clear()
