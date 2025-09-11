@@ -3,10 +3,14 @@ from http import HTTPStatus
 from fastapi import FastAPI
 from fastapi.exceptions import HTTPException
 from fastapi.responses import HTMLResponse
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
+
+from fast_zero.models import User
+from fast_zero.settings import Settings
 
 from .schemas import (
     Message,
-    UserDb,
     UserList,
     UserNotFound,
     UserPublic,
@@ -28,11 +32,31 @@ def read_html():
     return '<h1>Olá, Mundo!</h1>'
 
 
-@app.post('/users/', status_code=HTTPStatus.CREATED, response_model=UserPublic)
+@app.post(
+    '/users/',
+    status_code=HTTPStatus.CREATED,
+    response_model=UserPublic,
+    responses={HTTPStatus.BAD_REQUEST: {'model': Message}},
+)
 def create_user(user: UserSchema):
-    user_with_id = UserDb(**user.model_dump(), id=len(fake_db) + 1)
-    fake_db.append(user_with_id)
-    return user_with_id
+    engine = create_engine(Settings().DATABASE_URL, echo=True, future=True)
+
+    with Session(engine) as session:
+        if session.scalar(
+            select(User).where(
+                (User.email == user.email) or (User.username == user.username)
+            )
+        ):
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail='Usuário com este email ou username já existe',
+            )
+
+        session.add(User(**user.model_dump()))
+        session.commit()
+        session.refresh(user)
+
+    return user
 
 
 @app.get('/users/', status_code=HTTPStatus.OK, response_model=UserList)
