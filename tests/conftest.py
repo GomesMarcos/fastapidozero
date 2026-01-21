@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from sqlalchemy import StaticPool, create_engine, event
 from sqlalchemy.orm import Session
 
 from fast_zero.app import app
@@ -30,29 +30,35 @@ def client(session):
     app.dependency_overrides.clear()
 
 
-# @pytest.fixture
-# def mock_create_user():
-#     # Limpa a fake_db antes do teste
-#     fake_db.clear()
+@pytest.fixture
+def mock_create_user(session):
+    """Cria um usuário no banco de testes."""
 
-#     # Cria o user e insere em fake_db
-#     user = UserDb(
-#         id=1,
-#         username='testuser',
-#         email='testuser@example.com',
-#         password='password123',
-#     )
-#     fake_db.append(user)
+    user = User(
+        username='testuser',
+        email='testuser@example.com',
+        password='password123',
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
 
-#     yield user
-#     # Limpa a fake_db após o teste
-#     fake_db.clear()
+    yield user
+
+    # Limpa o usuário após o teste
+    session.delete(user)
+    session.commit()
+    session.flush()
 
 
 @pytest.fixture
 def session():
     # Banco de testes em memória
-    engine = create_engine('sqlite:///:memory:')
+    engine = create_engine(
+        'sqlite:///:memory:',
+        connect_args={'check_same_thread': False},
+        poolclass=StaticPool,
+    )
 
     # Garante que TODAS as tabelas mapeadas (incluindo users) são criadas
     table_registry.metadata.create_all(engine)

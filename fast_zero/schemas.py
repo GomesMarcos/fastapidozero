@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, PositiveInt
+from pydantic import BaseModel, ConfigDict, EmailStr, PositiveInt
 
 
 class Message(BaseModel):
@@ -8,6 +8,8 @@ class Message(BaseModel):
 class UserPublic(BaseModel):
     username: str
     email: EmailStr
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserSchema(UserPublic):

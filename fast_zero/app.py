@@ -17,8 +17,6 @@ from .schemas import (
 
 app = FastAPI(title='FastAPI do Zero', version='0.1.0')
 
-fake_db = []
-
 
 @app.get('/', response_model=Message, status_code=HTTPStatus.OK)
 def read_root():
@@ -34,18 +32,22 @@ def read_html():
     '/users/',
     status_code=HTTPStatus.CREATED,
     response_model=UserPublic,
-    responses={HTTPStatus.BAD_REQUEST: {'model': Message}},
+    responses={HTTPStatus.CONFLICT: {'model': Message}},
 )
 def create_user(user: UserSchema, session=Depends(get_session)):
-    if session.scalar(select(User).where((User.email == user.email))):
+    db_user = session.scalar(
+        select(User).where((User.email == user.email) | (User.username == user.username))
+    )
+
+    if db_user is not None:
+        error_message = 'Usuário com este'
+        if db_user.email == user.email:
+            error_message += ' email já existe'
+        if db_user.username == user.username:
+            error_message += ' username já existe'
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail='Usuário com este email já existe',
-        )
-    if session.scalar(select(User).where((User.username == user.username))):
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail='Usuário com este username já existe',
+            status_code=HTTPStatus.CONFLICT,
+            detail=error_message,
         )
 
     db_user = User(**user.model_dump())
@@ -57,8 +59,9 @@ def create_user(user: UserSchema, session=Depends(get_session)):
 
 
 @app.get('/users/', status_code=HTTPStatus.OK, response_model=UserList)
-def get_all_users():
-    return {'users': fake_db}
+def get_users(session=Depends(get_session), limit: int = 10, offset: int = 0):
+    users = session.scalars(select(User).limit(limit).offset(offset)).all()
+    return {'users': users}
 
 
 @app.get(
@@ -67,8 +70,8 @@ def get_all_users():
     response_model=UserPublic,
     responses={HTTPStatus.NOT_FOUND: {'model': UserNotFound}},
 )
-def get_user_by_id(user_id: int):
-    user = next((user for user in fake_db if user.id == user_id), None)
+def get_user_by_id(user_id: int, session=Depends(get_session)):
+    user = session.scalar(select(User).where(User.id == user_id))
     if user is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -83,16 +86,21 @@ def get_user_by_id(user_id: int):
     response_model=UserPublic,
     responses={HTTPStatus.NOT_FOUND: {'model': UserNotFound}},
 )
-def update_user(user_id: int, user: UserSchema):
-    existing_user = next((user for user in fake_db if user.id == user_id), None)
+def update_user(user_id: int, user: UserSchema, session=Depends(get_session)):
+    existing_user = session.scalar(select(User).where(User.id == user_id))
     if existing_user is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail='Usuário não encontrado',
         )
-    updated_user = existing_user.copy(update=user.model_dump())
-    fake_db[fake_db.index(existing_user)] = updated_user
-    return updated_user
+
+    # atualiza os campos do modelo SQLAlchemy com os dados do schema
+    for field, value in user.model_dump().items():
+        setattr(existing_user, field, value)
+
+    session.commit()
+    session.refresh(existing_user)
+    return existing_user
 
 
 @app.delete(
@@ -101,12 +109,13 @@ def update_user(user_id: int, user: UserSchema):
     response_model=Message,
     responses={HTTPStatus.NOT_FOUND: {'model': UserNotFound}},
 )
-def delete_user(user_id: int):
-    existing_user = next((user for user in fake_db if user.id == user_id), None)
+def delete_user(user_id: int, session=Depends(get_session)):
+    existing_user = session.scalar(select(User).where(User.id == user_id))
     if existing_user is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail='Usuário não encontrado',
         )
-    fake_db.remove(existing_user)
+    session.delete(existing_user)
+    session.commit()
     return {'message': f'Usuário {existing_user.id} deletado com sucesso'}
