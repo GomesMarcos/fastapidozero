@@ -1,13 +1,11 @@
 from http import HTTPStatus
 
-from fastapi import FastAPI
-from fastapi.exceptions import HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 
+from fast_zero.database import get_session
 from fast_zero.models import User
-from fast_zero.settings import Settings
 
 from .schemas import (
     Message,
@@ -38,25 +36,24 @@ def read_html():
     response_model=UserPublic,
     responses={HTTPStatus.BAD_REQUEST: {'model': Message}},
 )
-def create_user(user: UserSchema):
-    engine = create_engine(Settings().DATABASE_URL, echo=True, future=True)
+def create_user(user: UserSchema, session=Depends(get_session)):
+    if session.scalar(select(User).where((User.email == user.email))):
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Usuário com este email já existe',
+        )
+    if session.scalar(select(User).where((User.username == user.username))):
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Usuário com este username já existe',
+        )
 
-    with Session(engine) as session:
-        if session.scalar(
-            select(User).where(
-                (User.email == user.email) or (User.username == user.username)
-            )
-        ):
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail='Usuário com este email ou username já existe',
-            )
+    db_user = User(**user.model_dump())
+    session.add(db_user)
+    session.commit()
+    session.refresh(db_user)
 
-        session.add(User(**user.model_dump()))
-        session.commit()
-        session.refresh(user)
-
-    return user
+    return db_user
 
 
 @app.get('/users/', status_code=HTTPStatus.OK, response_model=UserList)
@@ -87,9 +84,7 @@ def get_user_by_id(user_id: int):
     responses={HTTPStatus.NOT_FOUND: {'model': UserNotFound}},
 )
 def update_user(user_id: int, user: UserSchema):
-    existing_user = next(
-        (user for user in fake_db if user.id == user_id), None
-    )
+    existing_user = next((user for user in fake_db if user.id == user_id), None)
     if existing_user is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -107,9 +102,7 @@ def update_user(user_id: int, user: UserSchema):
     responses={HTTPStatus.NOT_FOUND: {'model': UserNotFound}},
 )
 def delete_user(user_id: int):
-    existing_user = next(
-        (user for user in fake_db if user.id == user_id), None
-    )
+    existing_user = next((user for user in fake_db if user.id == user_id), None)
     if existing_user is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,

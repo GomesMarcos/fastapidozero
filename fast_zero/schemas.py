@@ -5,15 +5,13 @@ class Message(BaseModel):
     message: str
 
 
-class UserSchema(BaseModel):
+class UserPublic(BaseModel):
     username: str
     email: EmailStr
+
+
+class UserSchema(UserPublic):
     password: str
-
-
-class UserPublic(BaseModel):
-    id: PositiveInt
-    username: str
 
 
 class UserDb(UserSchema):
