@@ -118,4 +118,4 @@ def delete_user(user_id: int, session=Depends(get_session)):
         )
     session.delete(existing_user)
     session.commit()
-    return {'message': f'Usuário {existing_user.id} deletado com sucesso'}
+    return {'message': 'Usuário deletado com sucesso'}

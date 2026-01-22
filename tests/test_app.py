@@ -111,7 +111,7 @@ def test_delete_user(client, mock_create_user):
     response = client.delete('/users/1')
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json() == {'message': 'Usuário 1 deletado com sucesso'}
+    assert response.json() == {'message': 'Usuário deletado com sucesso'}
 
 
 def test_get_user_by_id(client, mock_create_user):
