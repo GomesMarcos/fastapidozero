@@ -136,6 +136,29 @@ def test_update_user_not_found(client):
     assert response.json() == {'detail': 'Usuário não encontrado'}
 
 
+def test_update_user_to_an_existing_username(client, mock_create_user):
+    client.post(
+        '/users/',
+        json={
+            'username': 'newuser',
+            'email': 'newuser@example.com',
+            'password': 'newpassword123',
+        },
+    )
+
+    response = client.put(
+        '/users/1',
+        json={
+            'username': 'newuser',
+            'email': 'newuser@example.com',
+            'password': 'newpassword123',
+        },
+    )
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json() == {'detail': 'Usuário com este username ou email já existe'}
+
+
 def test_delete_user_not_found(client):
     response = client.delete('/users/1')
 

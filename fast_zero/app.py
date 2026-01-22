@@ -3,6 +3,7 @@ from http import HTTPStatus
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from fast_zero.database import get_session
 from fast_zero.models import User
@@ -94,13 +95,20 @@ def update_user(user_id: int, user: UserSchema, session=Depends(get_session)):
             detail='Usuário não encontrado',
         )
 
-    # atualiza os campos do modelo SQLAlchemy com os dados do schema
-    for field, value in user.model_dump().items():
-        setattr(existing_user, field, value)
+    try:
+        # atualiza os campos do modelo SQLAlchemy com os dados do schema
+        for field, value in user.model_dump().items():
+            setattr(existing_user, field, value)
 
-    session.commit()
-    session.refresh(existing_user)
-    return existing_user
+        session.commit()
+        session.refresh(existing_user)
+        return existing_user
+    except IntegrityError as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail='Usuário com este username ou email já existe',
+        ) from e
 
 
 @app.delete(

@@ -49,24 +49,28 @@ def mock_create_user(session):
     session.delete(user)
     session.commit()
     session.flush()
+    session.close()
 
 
 @pytest.fixture
 def session():
-    # Banco de testes em memória
-    engine = create_engine(
-        'sqlite:///:memory:',
-        connect_args={'check_same_thread': False},
-        poolclass=StaticPool,
-    )
+    try:
+        # Banco de testes em memória
+        engine = create_engine(
+            'sqlite:///:memory:',
+            connect_args={'check_same_thread': False},
+            poolclass=StaticPool,
+        )
 
-    # Garante que TODAS as tabelas mapeadas (incluindo users) são criadas
-    table_registry.metadata.create_all(engine)
-    with Session(autocommit=False, autoflush=False, bind=engine) as session:
-        yield session
+        # Garante que TODAS as tabelas mapeadas (incluindo users) são criadas
+        table_registry.metadata.create_all(engine)
+        with Session(autocommit=False, autoflush=False, bind=engine) as session:
+            yield session
 
-    # Limpa as tabelas após os testes
-    table_registry.metadata.drop_all(engine)
+        # Limpa as tabelas após os testes
+        table_registry.metadata.drop_all(engine)
+    finally:
+        session.close()
 
 
 @contextmanager
