@@ -2,14 +2,22 @@ from http import HTTPStatus
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from fast_zero.database import get_session
 from fast_zero.models import User
+from fast_zero.security import (
+    create_access_token,
+    get_current_user,
+    get_password_hash,
+    verify_password,
+)
 
 from .schemas import (
     Message,
+    Token,
     UserList,
     UserNotFound,
     UserPublic,
@@ -51,7 +59,10 @@ def create_user(user: UserSchema, session=Depends(get_session)):
             detail=error_message,
         )
 
-    db_user = User(**user.model_dump())
+    user_data = user.model_dump()
+    user_data['password'] = get_password_hash(user_data['password'])
+
+    db_user = User(**user_data)
     session.add(db_user)
     session.commit()
     session.refresh(db_user)
@@ -60,7 +71,12 @@ def create_user(user: UserSchema, session=Depends(get_session)):
 
 
 @app.get('/users/', status_code=HTTPStatus.OK, response_model=UserList)
-def get_users(session=Depends(get_session), limit: int = 10, offset: int = 0):
+def get_users(
+    session=Depends(get_session),
+    limit: int = 10,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+):
     users = session.scalars(select(User).limit(limit).offset(offset)).all()
     return {'users': users}
 
@@ -87,22 +103,29 @@ def get_user_by_id(user_id: int, session=Depends(get_session)):
     response_model=UserPublic,
     responses={HTTPStatus.NOT_FOUND: {'model': UserNotFound}},
 )
-def update_user(user_id: int, user: UserSchema, session=Depends(get_session)):
-    existing_user = session.scalar(select(User).where(User.id == user_id))
-    if existing_user is None:
+def update_user(
+    user_id: int,
+    user: UserSchema,
+    session=Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.id != user_id:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail='Usuário não encontrado',
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='Você não tem permissão para atualizar este usuário',
         )
-
     try:
         # atualiza os campos do modelo SQLAlchemy com os dados do schema
-        for field, value in user.model_dump().items():
-            setattr(existing_user, field, value)
+        user_data = user.model_dump()
+        if 'password' in user_data and user_data['password'] is not None:
+            user_data['password'] = get_password_hash(user_data['password'])
+
+        for field, value in user_data.items():
+            setattr(current_user, field, value)
 
         session.commit()
-        session.refresh(existing_user)
-        return existing_user
+        session.refresh(current_user)
+        return current_user
     except IntegrityError as e:
         session.rollback()
         raise HTTPException(
@@ -117,13 +140,32 @@ def update_user(user_id: int, user: UserSchema, session=Depends(get_session)):
     response_model=Message,
     responses={HTTPStatus.NOT_FOUND: {'model': UserNotFound}},
 )
-def delete_user(user_id: int, session=Depends(get_session)):
-    existing_user = session.scalar(select(User).where(User.id == user_id))
-    if existing_user is None:
+def delete_user(
+    user_id: int,
+    session=Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.id != user_id:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail='Usuário não encontrado',
+            status_code=HTTPStatus.FORBIDDEN,
+            detail='Você não tem permissão para atualizar este usuário',
         )
-    session.delete(existing_user)
+    session.delete(current_user)
     session.commit()
     return {'message': 'Usuário deletado com sucesso'}
+
+
+@app.post('/token', response_model=Token)
+def get_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(), session=Depends(get_session)
+):
+    user = session.scalar(select(User).where(User.email == form_data.username))
+
+    if not user or not verify_password(form_data.password, user.password):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='Credenciais inválidas',
+        )
+
+    access_token = create_access_token(data={'sub': user.email})
+    return {'access_token': access_token, 'token_type': 'Bearer'}

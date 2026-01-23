@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, EmailStr, PositiveInt
 
 
@@ -28,3 +30,9 @@ class UserList(BaseModel):
 
 class UserNotFound(BaseModel):
     detail: str = 'Usuário não encontrado'
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = 'Bearer'
+    expires_in: Optional[int] = None

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from fast_zero.app import app
 from fast_zero.database import get_session
 from fast_zero.models import User, table_registry
+from fast_zero.security import get_password_hash
 
 # from fast_zero.schemas import UserDb
 
@@ -34,14 +35,18 @@ def client(session):
 def mock_create_user(session):
     """Cria um usuário no banco de testes."""
 
+    PASSWORD = 'password123'
+
     user = User(
         username='testuser',
         email='testuser@example.com',
-        password='password123',
+        password=get_password_hash(PASSWORD),
     )
     session.add(user)
     session.commit()
     session.refresh(user)
+
+    user.plain_password = PASSWORD  # type: ignore
 
     yield user
 
@@ -91,3 +96,16 @@ def _mock_db_time(model, time=datetime(2026, 1, 20, 12, 0, 0)):
 @pytest.fixture
 def mock_db_time():
     return _mock_db_time
+
+
+@pytest.fixture
+def token(client, mock_create_user):
+    response = client.post(
+        '/token',
+        data={
+            'username': mock_create_user.email,
+            'password': mock_create_user.plain_password,  # type: ignore
+        },
+    )
+
+    return response.json()['access_token']
