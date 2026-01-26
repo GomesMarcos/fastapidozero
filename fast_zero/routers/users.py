@@ -10,9 +10,11 @@ from fast_zero.routers import (
     HTTPException,
     HTTPStatus,
     IntegrityError,
+    Query,
     select,
 )
 from fast_zero.schemas import (
+    FilterPage,
     Message,
     UserList,
     UserNotFound,
@@ -27,6 +29,7 @@ from fast_zero.security import (
 router = APIRouter(prefix='/users', tags=['users'])
 Session = Annotated[SessionOrm, Depends(get_session)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
+FilterPageDep = Annotated[FilterPage, Query()]
 
 
 @router.post(
@@ -66,10 +69,11 @@ def create_user(user: UserSchema, session: Session):
 def get_users(
     session: Session,
     current_user: CurrentUser,
-    limit: int = 10,
-    offset: int = 0,
+    filter_page: FilterPageDep,
 ):
-    users = session.scalars(select(User).limit(limit).offset(offset)).all()
+    users = session.scalars(
+        select(User).limit(filter_page.limit).offset(filter_page.offset)
+    ).all()
     return {'users': users}
 
 

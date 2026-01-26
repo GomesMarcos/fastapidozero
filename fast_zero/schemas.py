@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, PositiveInt
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, PositiveInt
 
 
 class Message(BaseModel):
@@ -36,3 +36,8 @@ class Token(BaseModel):
     access_token: str
     token_type: str = 'Bearer'
     expires_in: Optional[int] = None
+
+
+class FilterPage(BaseModel):
+    offset: int = Field(ge=0, default=0)
+    limit: int = Field(ge=1, default=10)
