@@ -198,7 +198,7 @@ def test_get_user_by_id_not_found(client):
 
 def test_token(client, mock_create_user):
     response = client.post(
-        '/token',
+        '/auth/token',
         data={
             'username': 'testuser@example.com',
             'password': mock_create_user.plain_password,
@@ -213,7 +213,7 @@ def test_token(client, mock_create_user):
 
 def test_token_invalid_credentials(client):
     response = client.post(
-        '/token',
+        '/auth/token',
         data={
             'username': 'invaliduser@example.com',
             'password': 'wrongpassword',

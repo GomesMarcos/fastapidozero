@@ -101,7 +101,7 @@ def mock_db_time():
 @pytest.fixture
 def token(client, mock_create_user):
     response = client.post(
-        '/token',
+        '/auth/token',
         data={
             'username': mock_create_user.email,
             'password': mock_create_user.plain_password,  # type: ignore

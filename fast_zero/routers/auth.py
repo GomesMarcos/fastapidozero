@@ -1,0 +1,32 @@
+# fast_zero/routers/auth.py
+from fastapi.security import OAuth2PasswordRequestForm
+
+from fast_zero.database import get_session
+from fast_zero.models import User
+from fast_zero.routers import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    HTTPStatus,
+    select,
+)
+from fast_zero.schemas import Token
+from fast_zero.security import create_access_token, verify_password
+
+router = APIRouter(prefix='/auth', tags=['auth'])
+
+
+@router.post('/token', response_model=Token)
+def get_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(), session=Depends(get_session)
+):
+    user = session.scalar(select(User).where(User.email == form_data.username))
+
+    if not user or not verify_password(form_data.password, user.password):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='Credenciais inválidas',
+        )
+
+    access_token = create_access_token(data={'sub': user.email})
+    return {'access_token': access_token, 'token_type': 'Bearer'}
