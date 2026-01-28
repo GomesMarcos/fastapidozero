@@ -1,8 +1,8 @@
 from http import HTTPStatus
 
 
-def test_token(client, mock_create_user):
-    response = client.post(
+async def test_token(async_client, mock_create_user):
+    response = await async_client.post(
         '/auth/token',
         data={
             'username': 'testuser@example.com',
@@ -16,8 +16,8 @@ def test_token(client, mock_create_user):
     assert response.json()['expires_in'] is None
 
 
-def test_token_invalid_credentials(client):
-    response = client.post(
+async def test_token_invalid_credentials(async_client):
+    response = await async_client.post(
         '/auth/token',
         data={
             'username': 'invaliduser@example.com',
