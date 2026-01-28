@@ -1,8 +1,10 @@
 from contextlib import contextmanager
 from datetime import datetime
+from typing import AsyncIterator
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import StaticPool, create_engine, event
 from sqlalchemy.orm import Session
 
@@ -115,3 +117,22 @@ def token(client, mock_create_user):
 @pytest.fixture
 def settings():
     return Settings()
+
+
+@pytest.fixture
+async def async_client(session) -> AsyncIterator[AsyncClient]:
+    """Test client assíncrono que usa a sessão de banco criada pelo fixture `session`."""
+
+    async def get_session_override():
+        return session
+
+    # sobrescreve a dependência antes de criar o AsyncClient
+    app.dependency_overrides[get_session] = get_session_override
+
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url='http://test') as client:
+        yield client
+
+    # limpa as overrides depois dos testes
+    app.dependency_overrides.clear()
