@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from sqlalchemy.orm import Session as SessionOrm
+from sqlalchemy.orm import Session
 
 from fast_zero.database import get_session
 from fast_zero.models import User
@@ -27,9 +27,11 @@ from fast_zero.security import (
 )
 
 router = APIRouter(prefix='/users', tags=['users'])
-Session = Annotated[SessionOrm, Depends(get_session)]
-CurrentUser = Annotated[User, Depends(get_current_user)]
-FilterPageDep = Annotated[FilterPage, Query()]
+
+# T_... Nova convenção da PEP8 para indicar tipos.
+T_Session = Annotated[Session, Depends(get_session)]
+T_CurrentUser = Annotated[User, Depends(get_current_user)]
+T_FilterPageDep = Annotated[FilterPage, Query()]
 
 
 @router.post(
@@ -38,7 +40,7 @@ FilterPageDep = Annotated[FilterPage, Query()]
     response_model=UserPublic,
     responses={HTTPStatus.CONFLICT: {'model': Message}},
 )
-def create_user(user: UserSchema, session: Session):
+def create_user(user: UserSchema, session: T_Session):
     db_user = session.scalar(
         select(User).where((User.email == user.email) | (User.username == user.username))
     )
@@ -67,9 +69,9 @@ def create_user(user: UserSchema, session: Session):
 
 @router.get('/', status_code=HTTPStatus.OK, response_model=UserList)
 def get_users(
-    session: Session,
-    current_user: CurrentUser,
-    filter_page: FilterPageDep,
+    session: T_Session,
+    current_user: T_CurrentUser,
+    filter_page: T_FilterPageDep,
 ):
     users = session.scalars(
         select(User).limit(filter_page.limit).offset(filter_page.offset)
@@ -83,7 +85,7 @@ def get_users(
     response_model=UserPublic,
     responses={HTTPStatus.NOT_FOUND: {'model': UserNotFound}},
 )
-def get_user_by_id(user_id: int, session: Session):
+def get_user_by_id(user_id: int, session: T_Session):
     user = session.scalar(select(User).where(User.id == user_id))
     if user is None:
         raise HTTPException(
@@ -102,8 +104,8 @@ def get_user_by_id(user_id: int, session: Session):
 def update_user(
     user_id: int,
     user: UserSchema,
-    session: Session,
-    current_user: CurrentUser,
+    session: T_Session,
+    current_user: T_CurrentUser,
 ):
     if current_user.id != user_id:
         raise HTTPException(
@@ -138,8 +140,8 @@ def update_user(
 )
 def delete_user(
     user_id: int,
-    session: Session,
-    current_user: CurrentUser,
+    session: T_Session,
+    current_user: T_CurrentUser,
 ):
     if current_user.id != user_id:
         raise HTTPException(
