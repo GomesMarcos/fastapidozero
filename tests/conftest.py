@@ -74,14 +74,10 @@ def mock_create_user(session):
 def other_user(session):
     """Cria um usuário no banco de testes utilizando UserFactory"""
 
-    PASSWORD = 'password123'
-
-    user = UserFactory(password=get_password_hash(PASSWORD))
+    user = UserFactory()
     session.add(user)
     session.commit()
     session.refresh(user)
-
-    user.plain_password = PASSWORD  # type: ignore
 
     yield user
 
