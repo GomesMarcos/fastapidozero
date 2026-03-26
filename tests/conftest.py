@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import AsyncIterator
 
+import factory
 import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
@@ -15,6 +16,15 @@ from fast_zero.security import get_password_hash
 from fast_zero.settings import Settings
 
 # from fast_zero.schemas import UserDb
+
+
+class UserFactory(factory.Factory):
+    class Meta:
+        model = User
+
+    username = factory.sequence(lambda n: f'Test{n}')
+    email = factory.LazyAttribute(lambda obj: f'{obj.username}@test.com')
+    password = factory.LazyAttribute(lambda obj: f'{obj.username} qwe')
 
 
 @pytest.fixture
@@ -45,6 +55,28 @@ def mock_create_user(session):
         email='testuser@example.com',
         password=get_password_hash(PASSWORD),
     )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    user.plain_password = PASSWORD  # type: ignore
+
+    yield user
+
+    # Limpa o usuário após o teste
+    session.delete(user)
+    session.commit()
+    session.flush()
+    session.close()
+
+
+@pytest.fixture
+def other_user(session):
+    """Cria um usuário no banco de testes utilizando UserFactory"""
+
+    PASSWORD = 'password123'
+
+    user = UserFactory(password=get_password_hash(PASSWORD))
     session.add(user)
     session.commit()
     session.refresh(user)

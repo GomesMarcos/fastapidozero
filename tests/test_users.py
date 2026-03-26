@@ -152,9 +152,9 @@ def test_update_user_to_an_existing_username(client, mock_create_user, token):
     assert response.json() == {'detail': 'Usuário com este username ou email já existe'}
 
 
-def test_delete_different_user(client, token):
+def test_delete_different_user(client, token, other_user):
     response = client.delete(
-        '/users/12',
+        f'/users/{other_user.id}',
         headers={'Authorization': f'Bearer {token}'},
     )
 
