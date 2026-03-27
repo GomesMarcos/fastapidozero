@@ -1,14 +1,15 @@
 from datetime import datetime, timedelta
 from http import HTTPStatus
+from typing import Annotated
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from jwt import DecodeError, decode
+from jwt import DecodeError, ExpiredSignatureError, decode
 from jwt import encode as encode_jwt
 from pwdlib import PasswordHash
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from fast_zero.database import get_session
 from fast_zero.models import User
@@ -18,6 +19,8 @@ settings = Settings()
 
 pwd_context = PasswordHash.recommended()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='auth/token')
+
+T_Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 def get_password_hash(password: str):
@@ -61,8 +64,8 @@ def create_access_token(data: dict):
     return encode_jwt(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def get_current_user(
-    session: Session = Depends(get_session),
+async def get_current_user(
+    session: T_Session,
     token: str = Depends(oauth2_scheme),
 ):
     credential_exception = HTTPException(
@@ -77,8 +80,11 @@ def get_current_user(
             raise credential_exception
     except DecodeError as e:
         raise credential_exception from e
+    except ExpiredSignatureError as e:
+        credential_exception.detail = 'Token expirado. Realize login novamente.'
+        raise credential_exception from e
 
-    if user := session.scalar(select(User).where(User.email == subject_email)):
+    if user := await session.scalar(select(User).where(User.email == subject_email)):
         return user
 
     raise credential_exception

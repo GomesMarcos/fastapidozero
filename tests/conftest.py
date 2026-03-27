@@ -4,18 +4,17 @@ from typing import AsyncIterator
 
 import factory
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import StaticPool, create_engine, event
-from sqlalchemy.orm import Session
+from sqlalchemy import StaticPool, event
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from fast_zero.app import app
 from fast_zero.database import get_session
 from fast_zero.models import User, table_registry
 from fast_zero.security import get_password_hash
 from fast_zero.settings import Settings
-
-# from fast_zero.schemas import UserDb
 
 
 class UserFactory(factory.Factory):
@@ -28,7 +27,7 @@ class UserFactory(factory.Factory):
 
 
 @pytest.fixture
-def client(session):
+def client(session: AsyncSession):
     """Test client que usa a sessão de banco criada pelo fixture `session`."""
 
     def get_session_override():
@@ -44,8 +43,8 @@ def client(session):
     app.dependency_overrides.clear()
 
 
-@pytest.fixture
-def mock_create_user(session):
+@pytest_asyncio.fixture
+async def mock_create_user(session: AsyncSession):
     """Cria um usuário no banco de testes."""
 
     PASSWORD = 'password123'
@@ -56,57 +55,55 @@ def mock_create_user(session):
         password=get_password_hash(PASSWORD),
     )
     session.add(user)
-    session.commit()
-    session.refresh(user)
+    await session.commit()
+    await session.refresh(user)
 
     user.plain_password = PASSWORD  # type: ignore
 
     yield user
 
     # Limpa o usuário após o teste
-    session.delete(user)
-    session.commit()
-    session.flush()
-    session.close()
+    await session.delete(user)
+    await session.commit()
+    await session.flush()
+    await session.close()
 
 
-@pytest.fixture
-def other_user(session):
+@pytest_asyncio.fixture
+async def other_user(session: AsyncSession):
     """Cria um usuário no banco de testes utilizando UserFactory"""
 
     user = UserFactory()
     session.add(user)
-    session.commit()
-    session.refresh(user)
+    await session.commit()
+    await session.refresh(user)
 
     yield user
 
     # Limpa o usuário após o teste
-    session.delete(user)
-    session.commit()
-    session.flush()
-    session.close()
+    await session.delete(user)
+    await session.commit()
+    await session.flush()
+    await session.close()
 
 
-@pytest.fixture
-def session():
-    try:
-        # Banco de testes em memória
-        engine = create_engine(
-            'sqlite:///:memory:',
-            connect_args={'check_same_thread': False},
-            poolclass=StaticPool,
-        )
+@pytest_asyncio.fixture
+async def session():
+    # Banco de testes em memória
+    engine = create_async_engine(
+        'sqlite+aiosqlite:///:memory:',
+        connect_args={'check_same_thread': False},
+        poolclass=StaticPool,
+    )
 
-        # Garante que TODAS as tabelas mapeadas (incluindo users) são criadas
-        table_registry.metadata.create_all(engine)
-        with Session(autocommit=False, autoflush=False, bind=engine) as session:
-            yield session
+    async with engine.begin() as conn:
+        await conn.run_sync(table_registry.metadata.create_all)
 
-        # Limpa as tabelas após os testes
-        table_registry.metadata.drop_all(engine)
-    finally:
-        session.close()
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        yield session
+
+    async with engine.begin() as conn:
+        await conn.run_sync(table_registry.metadata.drop_all)
 
 
 @contextmanager
@@ -148,7 +145,7 @@ def settings():
 
 
 @pytest.fixture
-async def async_client(session) -> AsyncIterator[AsyncClient]:
+async def async_client(session: AsyncSession) -> AsyncIterator[AsyncClient]:
     """Test client assíncrono que usa a sessão de banco criada pelo fixture `session`."""
 
     async def get_session_override():

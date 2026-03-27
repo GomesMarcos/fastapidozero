@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from fast_zero.database import get_session
 from fast_zero.models import User
@@ -29,7 +29,7 @@ from fast_zero.security import (
 router = APIRouter(prefix='/users', tags=['users'])
 
 # T_... Nova convenção da PEP8 para indicar tipos.
-T_Session = Annotated[Session, Depends(get_session)]
+T_Session = Annotated[AsyncSession, Depends(get_session)]
 T_CurrentUser = Annotated[User, Depends(get_current_user)]
 T_FilterPageDep = Annotated[FilterPage, Query()]
 
@@ -40,12 +40,12 @@ T_FilterPageDep = Annotated[FilterPage, Query()]
     response_model=UserPublic,
     responses={HTTPStatus.CONFLICT: {'model': Message}},
 )
-def create_user(user: UserSchema, session: T_Session):
-    db_user = session.scalar(
+async def create_user(user: UserSchema, session: T_Session):
+    db_user = await session.scalar(
         select(User).where((User.email == user.email) | (User.username == user.username))
     )
 
-    if db_user is not None:
+    if db_user:
         error_message = 'Usuário com este'
         if db_user.email == user.email:
             error_message += ' email já existe'
@@ -61,22 +61,23 @@ def create_user(user: UserSchema, session: T_Session):
 
     db_user = User(**user_data)
     session.add(db_user)
-    session.commit()
-    session.refresh(db_user)
+    await session.commit()
+    await session.refresh(db_user)
 
     return db_user
 
 
 @router.get('/', status_code=HTTPStatus.OK, response_model=UserList)
-def get_users(
+async def get_users(
     session: T_Session,
     current_user: T_CurrentUser,
     filter_page: T_FilterPageDep,
 ):
-    users = session.scalars(
+    result = await session.scalars(
         select(User).limit(filter_page.limit).offset(filter_page.offset)
-    ).all()
-    return {'users': users}
+    )
+    users = result.all()
+    return {'users': list(users)}
 
 
 @router.get(
@@ -85,8 +86,8 @@ def get_users(
     response_model=UserPublic,
     responses={HTTPStatus.NOT_FOUND: {'model': UserNotFound}},
 )
-def get_user_by_id(user_id: int, session: T_Session):
-    user = session.scalar(select(User).where(User.id == user_id))
+async def get_user_by_id(user_id: int, session: T_Session):
+    user = await session.scalar(select(User).where(User.id == user_id))
     if user is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -101,7 +102,7 @@ def get_user_by_id(user_id: int, session: T_Session):
     response_model=UserPublic,
     responses={HTTPStatus.NOT_FOUND: {'model': UserNotFound}},
 )
-def update_user(
+async def update_user(
     user_id: int,
     user: UserSchema,
     session: T_Session,
@@ -121,11 +122,11 @@ def update_user(
         for field, value in user_data.items():
             setattr(current_user, field, value)
 
-        session.commit()
-        session.refresh(current_user)
+        await session.commit()
+        await session.refresh(current_user)
         return current_user
     except IntegrityError as e:
-        session.rollback()
+        await session.rollback()
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
             detail='Usuário com este username ou email já existe',
@@ -138,7 +139,7 @@ def update_user(
     response_model=Message,
     responses={HTTPStatus.NOT_FOUND: {'model': UserNotFound}},
 )
-def delete_user(
+async def delete_user(
     user_id: int,
     session: T_Session,
     current_user: T_CurrentUser,
@@ -148,6 +149,6 @@ def delete_user(
             status_code=HTTPStatus.FORBIDDEN,
             detail='Você não tem permissão para atualizar este usuário',
         )
-    session.delete(current_user)
-    session.commit()
+    await session.delete(current_user)
+    await session.commit()
     return {'message': 'Usuário deletado com sucesso'}

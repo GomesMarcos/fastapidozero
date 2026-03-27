@@ -15,23 +15,25 @@ def test_jwt(settings):
     assert 'exp' in decoded
 
 
-def test_user_not_found_exception(session):
+@pytest.mark.asyncio
+async def test_user_not_found_exception(session):
     data = {'test': 'test', 'sub': 'None@qwe.x'}
     token = create_access_token(data)
 
     with pytest.raises(HTTPException) as exc_info:
-        get_current_user(session, token)
+        await get_current_user(session, token)
 
     assert exc_info.value.status_code == HTTPStatus.UNAUTHORIZED
     assert exc_info.value.detail == 'Não foi possível validar as credenciais'
 
 
-def test_token_without_sub(session):
+@pytest.mark.asyncio
+async def test_token_without_sub(session):
     data = {'test': 'test'}
     token = create_access_token(data)
 
     with pytest.raises(HTTPException) as exc_info:
-        get_current_user(session, token)
+        await get_current_user(session, token)
 
     assert exc_info.value.status_code == HTTPStatus.UNAUTHORIZED
     assert exc_info.value.detail == 'Não foi possível validar as credenciais'

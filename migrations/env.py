@@ -88,7 +88,7 @@ async def run_async_migrations() -> None:
         await connection.run_sync(do_run_migrations)
 
 def run_migrations_online():
-        asyncio.run(run_async_migrations())
+    asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():
